@@ -120,6 +120,10 @@
 
             let longitude = Math.atan2(rotated_point[1], rotated_point[0]);
             let latitude =  Math.atan2(rotated_point[2],Math.sqrt(rotated_point[1]*rotated_point[1] + rotated_point[0]*rotated_point[0]))
+            // const reverse_earth_tilt = rotationMatrix(1,0.41015);
+            // p = vec3(rotated_point[0], rotated_point[1], rotated_point[2]);
+            // p = math.multiply(reverse_earth_tilt,p);
+            //p = normalize(p._data)
             return [vec(longitude, latitude), (angle_rev + 0.22363) % (2 * Math.PI), rotated_point];
         };
 
@@ -163,14 +167,16 @@
             x[n] = plast;
         }
 
-        day_array = time_array.map(t =>(t*365.25 + 182 )% 365.25)
+        let day_array = time_array.map(t =>(t*365.25 + 182 )% 365.25)
+        let month_array = day_array.map(d =>Math.floor( d/(365.25)*12))
+        let hour_array = c_analema.map(c => -(c / (2 * Math.PI)) * 24)
 
         const analemma_trace = {
             x: x_analema.map(p => p[0]),
             y: x_analema.map(p => p[1]),
             mode: 'markers',
             marker: {
-                color: c_analema.map(c => -(c / (2 * Math.PI)) * 24),
+                color: hour_array,
                 colorscale: 'RdBu',
                 colorbar: {
                     title: 'Hour'
@@ -184,7 +190,7 @@
             y: x_analema.map(p => p[1]),
             mode: 'markers',
             marker: {
-                color: day_array,
+                color: month_array,
                 colorscale: 'Jet',
                 colorbar: {
                     title: 'Month'
@@ -198,7 +204,7 @@
             y: x.map(p => p[1]),
             mode: 'markers',
             marker: {
-                color: c_analema.map(c => -(c / (2 * Math.PI)) * 24),
+                color: hour_array,
                 colorscale: 'RdBu',
                 colorbar: {
                     title: 'Hour'
@@ -212,7 +218,7 @@
             y: x.map(p => p[1]),
             mode: 'markers',
             marker: {
-                color: day_array,
+                color: month_array,
                 colorscale: 'Jet',
                 colorbar: {
                     title: 'Month'
@@ -227,7 +233,7 @@
             z: analema_3d.map(p => p[2]),
             mode: 'markers',
             marker: {
-                color: c_analema.map(c => -(c / (2 * Math.PI)) * 24),
+                color: hour_array,
                 colorscale: 'RdBu',
                 colorbar: {
                     title: 'Hour'
@@ -242,7 +248,7 @@
             z: analema_3d.map(p => p[2]),
             mode: 'markers',
             marker: {
-                color: day_array,
+                color: month_array,
                 colorscale: 'Jet',
                 colorbar: {
                     title: 'Month'

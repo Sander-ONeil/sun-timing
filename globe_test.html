@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Globe with Texture in Plotly.js</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div id="globe" style="width: 800px; height: 600px;"></div>
+    <script>
+        // Generate latitude and longitude data for the globe
+        const phi = [];
+        const theta = [];
+        const radius = 1;
+
+        for (let i = 0; i <= 180; i++) {
+            phi.push(i * Math.PI / 180);
+        }
+        for (let i = 0; i <= 360; i++) {
+            theta.push(i * Math.PI / 180);
+        }
+
+        const x = [];
+        const y = [];
+        const z = [];
+        const u = [];
+        const v = [];
+
+        for (let i = 0; i < phi.length; i++) {
+            for (let j = 0; j < theta.length; j++) {
+                x.push(radius * Math.sin(phi[i]) * Math.cos(theta[j]));
+                y.push(radius * Math.sin(phi[i]) * Math.sin(theta[j]));
+                z.push(radius * Math.cos(phi[i]));
+                u.push(j / (theta.length - 1)); // normalize to [0,1] for texture mapping
+                v.push(i / (phi.length - 1)); // normalize to [0,1] for texture mapping
+            }
+        }
+
+        // Create a mesh for the surface
+        const xMesh = [];
+        const yMesh = [];
+        const zMesh = [];
+        const uMesh = [];
+        const vMesh = [];
+        const gridSize = theta.length;
+
+        for (let i = 0; i < phi.length - 1; i++) {
+            for (let j = 0; j < theta.length - 1; j++) {
+                const idx = i * gridSize + j;
+                const idx1 = (i + 1) * gridSize + j;
+                const idx2 = (i + 1) * gridSize + (j + 1);
+                const idx3 = i * gridSize + (j + 1);
+
+                xMesh.push([x[idx], x[idx1], x[idx2], x[idx3]]);
+                yMesh.push([y[idx], y[idx1], y[idx2], y[idx3]]);
+                zMesh.push([z[idx], z[idx1], z[idx2], z[idx3]]);
+                uMesh.push([u[idx], u[idx1], u[idx2], u[idx3]]);
+                vMesh.push([v[idx], v[idx1], v[idx2], v[idx3]]);
+            }
+        }
+
+        // Prepare data for Plotly
+        const data = [{
+            type: 'surface',
+            x: xMesh,
+            y: yMesh,
+            z: zMesh,
+            surfacecolor: uMesh,
+            colorscale: [
+                [0, 'rgb(255, 255, 255)'],
+                [1, 'rgb(255, 255, 255)']
+            ],
+            showscale: false,
+            cmin: 0,
+            cmax: 1,
+            lighting: {
+                ambient: 0.5,
+                diffuse: 0.8,
+                specular: 0.3,
+                roughness: 0.9,
+                fresnel: 0.5
+            },
+            lightposition: {
+                x: 0,
+                y: 0,
+                z: 2
+            },
+            opacity: 1,
+            contour: {
+                x: { highlight: false },
+                y: { highlight: false },
+                z: { highlight: false }
+            }
+        }];
+
+        const layout = {
+            scene: {
+                xaxis: { range: [-1.5, 1.5], showgrid: false, zeroline: false, showline: false, showticklabels: false },
+                yaxis: { range: [-1.5, 1.5], showgrid: false, zeroline: false, showline: false, showticklabels: false },
+                zaxis: { range: [-1.5, 1.5], showgrid: false, zeroline: false, showline: false, showticklabels: false },
+                aspectratio: { x: 1, y: 1, z: 1 },
+                camera: {
+                    eye: { x: 1.5, y: 1.5, z: 1.5 }
+                }
+            },
+            title: '3D Globe with Texture',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)'
+        };
+
+        Plotly.newPlot('globe', data, layout);
+
+        // Add texture image
+        const img = new Image();
+        img.src = 'https://upload.wikimedia.org/wikipedia/commons/2/25/Land_shallow_topo_alpha_2048.png';
+        img.crossOrigin = "anonymous";
+
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, img.width, img.height).data;
+
+            const colors = [];
+            for (let i = 0; i < uMesh.length; i++) {
+                const row = [];
+                for (let j = 0; j < uMesh[i].length; j++) {
+                    const uIndex = Math.floor(uMesh[i][j] * (img.width - 1));
+                    const vIndex = Math.floor((1 - vMesh[i][j]) * (img.height - 1));
+                    const idx = (vIndex * img.width + uIndex) * 4;
+                    const r = imageData[idx];
+                    const g = imageData[idx + 1];
+                    const b = imageData[idx + 2];
+                    row.push(`rgb(${r},${g},${b})`);
+                }
+                colors.push(row);
+            }
+
+            const texture = {
+                type: 'surface',
+                x: xMesh,
+                y: yMesh,
+                z: zMesh,
+                surfacecolor: colors,
+                showscale: false,
+                lighting: {
+                    ambient: 0.5,
+                    diffuse: 0.8,
+                    specular: 0.3,
+                    roughness: 0.9,
+                    fresnel: 0.5
+                },
+                lightposition: {
+                    x: 0,
+                    y: 0,
+                    z: 2
+                },
+                opacity: 1,
+                contour: {
+                    x: { highlight: false },
+                    y: { highlight: false },
+                    z: { highlight: false }
+                }
+            };
+
+            Plotly.react('globe', [texture], layout);
+        };
+    </script>
+</body>
+</html>
