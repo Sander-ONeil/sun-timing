@@ -3,49 +3,260 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Sphere with Three.js</title>
-    <style>
-        body { margin: 0; }
-        canvas { display: block; }
-    </style>
+    <title>Orbit Simulation</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/9.4.4/math.min.js"></script>
 </head>
 <body>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <div style="display: flex;">
+        <div id="analemma" style="width: 600px; height: 400px;"></div>
+        <div id="analemma_12" style="width: 600px; height: 400px;"></div>
+    </div>
+    <div style="display: flex; margin-top: 20px;">
+        <div id="orbit" style="width: 600px; height: 400px;"></div>
+        <div id="orbit_12" style="width: 600px; height: 400px;"></div>
+    </div>
+    <div style="display: flex; margin-top: 20px;">
+        <div id="3d_analemma" style="width: 600px; height: 400px;"></div>
+        <div id="3d_analemma_12" style="width: 600px; height: 400px;"></div>
+    </div>
     <script>
-        // Set up the scene, camera, and renderer
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        const vec = (a, b) => [a, b];
+        const vec3 = (a, b, c) => [a, b, c];
+        const normalize = a => {
+            const norm = math.norm(a);
+            return a.map(x => x / norm);
+        };
 
-        // Create a sphere geometry and material, then combine them into a mesh
-        const geometry = new THREE.SphereGeometry(1, 32, 32);
-        const material = new THREE.MeshBasicMaterial({ color: 0x0077ff, wireframe: true });
-        const sphere = new THREE.Mesh(geometry, material);
-        scene.add(sphere);
+        const rotationMatrix = (axis, angle) => {
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
 
-        // Position the camera
-        camera.position.z = 5;
+            switch (axis) {
+                case 0: // X-axis
+                    return math.matrix([
+                        [1, 0, 0],
+                        [0, cosA, sinA],
+                        [0, -sinA, cosA]
+                    ]);
+                case 1: // Y-axis
+                    return math.matrix([
+                        [cosA, 0, -sinA],
+                        [0, 1, 0],
+                        [sinA, 0, cosA]
+                    ]);
+                case 2: // Z-axis
+                    return math.matrix([
+                        [cosA, sinA, 0],
+                        [-sinA, cosA, 0],
+                        [0, 0, 1]
+                    ]);
+                default:
+                    throw new Error("Invalid axis. Axis should be 0, 1, or 2.");
+            }
+        };
 
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
+        const totalEllipseDistance = (f1, f2, plast) => {
+            let d_sun = math.subtract(f1, plast);
+            let d_2 = math.subtract(f2, plast);
+            return math.norm(d_sun) + math.norm(d_2);
+        };
 
-            // Rotate the sphere for some basic animation
-            sphere.rotation.x += 0.01;
-            sphere.rotation.y += 0.01;
+        const points_per_day = 24;
+        const timescale = 365.25 * points_per_day;
+        const time = points_per_day * 365.25;
 
-            renderer.render(scene, camera);
+        const f1 = vec(-783.79 / 2, 0);
+        const f2 = vec(783.79 / 2, 0);
+
+        let x = Array.from({ length: time }, () => [0, 0]);
+        let x_analema = Array.from({ length: time }, () => [0, 0]);
+        let analema_3d = Array.from({ length: time }, () => [0, 0,0]);
+        let c_analema = Array(time).fill(0);
+        let time_array = Array(time).fill(0);
+        let plast = vec(23455, 0);
+
+        const totaldist = totalEllipseDistance(f1, f2, plast);
+
+        let a = totaldist / 2;
+        let c = Math.abs(f1[0] - f2[0]) / 2;
+        let b = Math.sqrt(a * a - c * c);
+
+        const initial_speed = 1.4484e5 + 0.999e2;
+        const mu = 5.1e14;
+        let d_sun = math.subtract(f1, plast);
+        let orbitalenergy = initial_speed * initial_speed / 2 - mu / math.norm(d_sun);
+
+        let last_angle = 0;
+        let last_m = 0;
+        let total_angle = 0;
+        x[0] = plast;
+
+        const transform_planet = (p, t) => {
+            const angle = t * Math.PI * 2;
+            const day_matrix = rotationMatrix(2, angle); // Z-axis rotation
+
+            const earth_tilt = math.unit(23.5, 'deg').toNumber('rad');
+            const tilt_matrix = rotationMatrix(1, earth_tilt); // Y-axis rotation
+
+            const rotated_point = math.multiply(tilt_matrix, math.multiply(day_matrix, p));
+            return rotated_point._data;
+        };
+
+        const rev_transform_planet = (p, t) => {
+            const angle = -t * Math.PI * 2 / points_per_day * 364.25 / 365.25;
+            const day_matrix = rotationMatrix(2, angle); // Z-axis rotation
+
+            const earth_tilt = math.unit(-23.5, 'deg').toNumber('rad');
+            const tilt_matrix = rotationMatrix(1, earth_tilt); // Y-axis rotation
+
+            const angle_tilt_to_elipse = 0.22363;
+            const day_tilt_to_elipse = rotationMatrix(2, angle_tilt_to_elipse); // Z-axis rotation
+
+            p = vec3(p[0], p[1], 0);
+            let rotated_point = math.multiply(day_matrix, math.multiply(tilt_matrix, math.multiply(day_tilt_to_elipse, p)));
+            rotated_point = normalize(rotated_point._data);
+            const angle_rev = -t * Math.PI * 2 / points_per_day;
+
+            let longitude = Math.atan2(rotated_point[1], rotated_point[0]);
+            let latitude =  Math.atan2(rotated_point[2],Math.sqrt(rotated_point[1]*rotated_point[1] + rotated_point[0]*rotated_point[0]))
+            return [vec(longitude, latitude), (angle_rev + 0.22363) % (2 * Math.PI), rotated_point];
+        };
+
+        for (let n = 1; n < time; n++) {
+            d_sun = math.subtract(f1, plast);
+            let d_2 = math.subtract(f2, plast);
+
+            const r = math.norm(d_sun);
+            const v = Math.sqrt(2 * (orbitalenergy + mu / r));
+
+            const normal = normalize(math.add(normalize(d_sun), normalize(d_2)));
+            const forward = vec(normal[1], -normal[0]);
+            plast = vec(plast[0] + forward[0] * v / timescale, plast[1] + forward[1] * v / timescale);
+
+            const analema = rev_transform_planet(math.subtract(f1, plast), n);
+            x_analema[n] = analema[0];
+            c_analema[n] = analema[1];
+            analema_3d[n] = analema[2];
+
+            let angle = Math.atan2(plast[1] / b, plast[0] / a);
+
+            const M = angle - 0.0167086 * Math.sin(angle - Math.PI);
+            const dif = M - last_m;
+            const goal_dif = 2 * Math.PI / timescale;
+            const goal_to_actual_ratio = goal_dif / dif;
+
+            let angle_change = angle - last_angle;
+            if (angle_change > 0) {
+                const goal_angle_change = angle_change * goal_to_actual_ratio;
+                angle = last_angle + goal_angle_change;
+            }
+
+            plast = vec(Math.cos(angle) * a, Math.sin(angle) * b);
+
+            last_m = M;
+
+            total_angle += Math.max(angle - last_angle, 0);
+            last_angle = angle;
+
+            time_array[n] = n / timescale;
+            x[n] = plast;
         }
-        animate();
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        day_array = time_array.map(t =>(t*365.25 + 182 )% 365.25)
+
+        const analemma_trace = {
+            x: x_analema.map(p => p[0]),
+            y: x_analema.map(p => p[1]),
+            mode: 'markers',
+            marker: {
+                color: c_analema.map(c => -(c / (2 * Math.PI)) * 24),
+                colorscale: 'RdBu',
+                colorbar: {
+                    title: 'Hour'
+                }
+            },
+            type: 'scatter'
+        };
+
+        const analemma_trace_12 = {
+            x: x_analema.map(p => p[0]),
+            y: x_analema.map(p => p[1]),
+            mode: 'markers',
+            marker: {
+                color: day_array,
+                colorscale: 'Jet',
+                colorbar: {
+                    title: 'Month'
+                }
+            },
+            type: 'scatter'
+        };
+
+        const orbit_trace = {
+            x: x.map(p => p[0]),
+            y: x.map(p => p[1]),
+            mode: 'markers',
+            marker: {
+                color: c_analema.map(c => -(c / (2 * Math.PI)) * 24),
+                colorscale: 'RdBu',
+                colorbar: {
+                    title: 'Hour'
+                }
+            },
+            type: 'scatter'
+        };
+
+        const orbit_trace_12 = {
+            x: x.map(p => p[0]),
+            y: x.map(p => p[1]),
+            mode: 'markers',
+            marker: {
+                color: day_array,
+                colorscale: 'Jet',
+                colorbar: {
+                    title: 'Month'
+                }
+            },
+            type: 'scatter'
+        };
+
+        const analemma_trace_3d = {
+            x: analema_3d.map(p => p[0]),
+            y: analema_3d.map(p => p[1]),
+            z: analema_3d.map(p => p[2]),
+            mode: 'markers',
+            marker: {
+                color: c_analema.map(c => -(c / (2 * Math.PI)) * 24),
+                colorscale: 'RdBu',
+                colorbar: {
+                    title: 'Hour'
+                }
+            },
+            type: 'scatter3d'
+        };
+
+        const analemma_trace_12_3d = {
+            x: analema_3d   .map(p => p[0]),
+            y: analema_3d.map(p => p[1]),
+            z: analema_3d.map(p => p[2]),
+            mode: 'markers',
+            marker: {
+                color: day_array,
+                colorscale: 'Jet',
+                colorbar: {
+                    title: 'Month'
+                }
+            },
+            type: 'scatter3d'
+        };
+
+        Plotly.newPlot('analemma', [analemma_trace], { title: 'Analemma' });
+        Plotly.newPlot('analemma_12', [analemma_trace_12], { title: 'Analemma (12 Colors)' });
+        Plotly.newPlot('orbit', [orbit_trace], { title: 'Orbit Plot' });
+        Plotly.newPlot('orbit_12', [orbit_trace_12], { title: 'Orbit Plot (12 Colors)' });
+        Plotly.newPlot('3d_analemma', [analemma_trace_3d], { title: '3d_analemma' });
+        Plotly.newPlot('3d_analemma_12', [analemma_trace_12_3d], { title: '3d_analemma (12 Colors)' });
     </script>
 </body>
 </html>
