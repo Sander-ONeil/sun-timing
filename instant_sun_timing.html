@@ -99,14 +99,14 @@ const rev_transform_planet = (p, a) => {
     let longitude = Math.atan2(rotated_point[1], rotated_point[0]);
     let latitude =  Math.atan2(rotated_point[2],Math.sqrt(rotated_point[1]*rotated_point[1] + rotated_point[0]*rotated_point[0]))
 
-    return [vec(longitude, latitude), (angle_rev + 0.22363) % (2 * Math.PI), rotated_point];
+    return [vec(longitude, latitude),Math.abs(angle_rev + 0.22363) % (2 * Math.PI), rotated_point];
 };
 
 const year_to_angle = (t) => {return t *2.0* Math.PI - (182.0)/365.25}
 const day_hour_to_angle = (d,h) => {return ((d - 182.0)/365.25 + h/365.25/24)*2.0*Math.PI}
 const day_hour_to_year = (d,h) => {return ((d)/365.25 + h/365.25/24)}
 
-let length = 360*12
+let length = 365.25*24
 let x = Array.from({ length: length }, () => [0, 0]);
 let x_analema = Array.from({ length: length }, () => [0, 0]);
 let analema_3d = Array.from({ length: length }, () => [0, 0,0]);
@@ -114,10 +114,12 @@ let c_analema = Array(length).fill(0);
 let time_array = Array(length).fill(0);
 
 for (let n = 0.0; n < length; n ++) {
-    let half_day =Math.floor( n /365.25)*24/12
+    //let half_day =Math.floor( n /365.25)
+    let hour = n%24
+    let day = Math.floor(n/24)
     
-    let a = day_hour_to_angle(n,half_day)
-    let t = day_hour_to_year(n,half_day)
+    let a = day_hour_to_angle(day,hour)
+    let t = day_hour_to_year(day,hour)
     let p = goal_angle_to_orbital_pos(a)
     let analema = rev_transform_planet(p,a)
 
@@ -131,7 +133,9 @@ for (let n = 0.0; n < length; n ++) {
 
 let day_array = time_array.map(t =>(t*365.25 )% 365.25)
 let month_array = day_array.map(d =>Math.floor( d/(365.25)*12))
-let hour_array = c_analema.map(c => -(c / (2 * Math.PI)) * 24)
+let hour_array = day_array.map(d => (d * 24) % 24)
+
+//let hour_array = c_analema.map(c => (c / (2 * Math.PI)) * 24)
 
 const analemma_trace = {
     x: x_analema.map(p => p[0]),
