@@ -104,7 +104,7 @@
         };
 
         const rev_transform_planet = (p, t) => {
-            const angle = -t * Math.PI * 2 / points_per_day * 364.25 / 365.25;
+            const angle = t * Math.PI * 2 / points_per_day * 366.25 / 365.25;
             const day_matrix = rotationMatrix(2, angle); // Z-axis rotation
 
             const earth_tilt = math.unit(-23.5, 'deg').toNumber('rad');
@@ -116,7 +116,7 @@
             p = vec3(p[0], p[1], 0);
             let rotated_point = math.multiply(day_matrix, math.multiply(tilt_matrix, math.multiply(day_tilt_to_elipse, p)));
             rotated_point = normalize(rotated_point._data);
-            const angle_rev = -t * Math.PI * 2 / points_per_day;
+            const angle_rev = t * Math.PI * 2 / points_per_day;
 
             let longitude = Math.atan2(rotated_point[1], rotated_point[0]);
             let latitude =  Math.atan2(rotated_point[2],Math.sqrt(rotated_point[1]*rotated_point[1] + rotated_point[0]*rotated_point[0]))
