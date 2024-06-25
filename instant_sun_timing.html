@@ -106,17 +106,33 @@ const year_to_angle = (t) => {return t *2.0* Math.PI - (182.0)/365.25}
 const day_hour_to_angle = (d,h) => {return ((d - 182.0)/365.25 + h/365.25/24)*2.0*Math.PI}
 const day_hour_to_year = (d,h) => {return ((d)/365.25 + h/365.25/24)}
 
-let length = 365.25*24
+let length = 24*60
 let x = Array.from({ length: length }, () => [0, 0]);
 let x_analema = Array.from({ length: length }, () => [0, 0]);
 let analema_3d = Array.from({ length: length }, () => [0, 0,0]);
 let c_analema = Array(length).fill(0);
 let time_array = Array(length).fill(0);
 
+// for (let n = 0.0; n < length; n ++) {
+//     //let half_day =Math.floor( n /365.25)
+//     let hour = n%24
+//     let day = Math.floor(n/24)
+    
+//     let a = day_hour_to_angle(day,hour)
+//     let t = day_hour_to_year(day,hour)
+//     let p = goal_angle_to_orbital_pos(a)
+//     let analema = rev_transform_planet(p,a)
+
+//     x_analema[n] = analema[0];
+//     c_analema[n] = analema[1];
+//     analema_3d[n] = analema[2];
+//     time_array[n] = t;
+//     x[n] = p;
+// }
 for (let n = 0.0; n < length; n ++) {
     //let half_day =Math.floor( n /365.25)
-    let hour = n%24
-    let day = Math.floor(n/24)
+    let hour = n/30
+    let day = 176
     
     let a = day_hour_to_angle(day,hour)
     let t = day_hour_to_year(day,hour)
