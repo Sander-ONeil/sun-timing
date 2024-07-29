@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plotly Image Example</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div id="plot" style="width: 800px; height: 800px;"></div>
+    <script>
+        var trace = {
+            x: [],
+            y: [],
+            type: 'scatter' // Empty scatter plot just to create the layout
+        };
+        
+        var layout = {
+            xaxis: {
+                range: [0, 1],
+                showgrid: false,
+                zeroline: false,
+                visible: false
+            },
+            yaxis: {
+                range: [0, 1],
+                showgrid: false,
+                zeroline: false,
+                visible: false,
+                scaleanchor: "x"
+            },
+            images: [
+                {
+                    source: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Mercator_projection_Square.JPG/1280px-Mercator_projection_Square.JPG",
+                    x: 0,
+                    y: 1,
+                    sizex: 1,
+                    sizey: 1,
+                    xref: "x",
+                    yref: "y",
+                    opacity: 1,
+                    layer: "below"
+                }
+            ]
+        };
+        
+        var data = [trace];
+        
+        Plotly.newPlot('plot', data, layout);
+    </script>
+</body>
+</html>
