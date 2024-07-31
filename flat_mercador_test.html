@@ -3,50 +3,318 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plotly Image Example</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <title>Orbit CLOCK</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/9.4.4/math.min.js"></script>
+    <style>
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .slider-label {
+            margin-right: 10px;
+            width: 100px;
+        }
+        .slider-input {
+            width: 600px;
+        }
+        #analemma {
+            border: 1px solid black;
+        }
+    </style>
 </head>
 <body>
-    <div id="plot" style="width: 800px; height: 800px;"></div>
+    <div class="slider-container">
+        <div class="slider-label">Latitude:</div>
+        <input type="range" min="-90" max="90" value="0" class="slider-input" id="latitude-slider">
+        <input type="text" id="latitude-value" value="0">
+    </div>
+    <div class="slider-container">
+        <div class="slider-label">Longitude:</div>
+        <input type="range" min="-180" max="180" value="0" class="slider-input" id="longitude-slider">
+        <input type="text" id="longitude-value" value="0">
+    </div>
+    <div class="slider-container">
+        <div class="slider-label">Day:</div>
+        <input type="range" min="0" max="365" value="0" class="slider-input" id="day-slider">
+        <input type="text" id="day-value" value="0">
+    </div>
+    <div class="slider-container">
+        <div class="slider-label">Hour:</div>
+        <input type="range" min="0" max="24" value="0" step = '.001' width = "100" class="slider-input" id="hour-slider">
+        <input type="text" id="hour-value" value="0">
+    </div>
+    <input type="text" id="date-value" size="100" value="0">
+    <canvas id="analemma" width="2000" height="1000"></canvas>
+
     <script>
-        var trace = {
-            x: [],
-            y: [],
-            type: 'scatter' // Empty scatter plot just to create the layout
-        };
-        
-        var layout = {
-            xaxis: {
-                range: [0, 1],
-                showgrid: false,
-                zeroline: false,
-                visible: false
-            },
-            yaxis: {
-                range: [0, 1],
-                showgrid: false,
-                zeroline: false,
-                visible: false,
-                scaleanchor: "x"
-            },
-            images: [
-                {
-                    source: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Mercator_projection_Square.JPG/1280px-Mercator_projection_Square.JPG",
-                    x: 0,
-                    y: 1,
-                    sizex: 1,
-                    sizey: 1,
-                    xref: "x",
-                    yref: "y",
-                    opacity: 1,
-                    layer: "below"
-                }
-            ]
-        };
-        
-        var data = [trace];
-        
-        Plotly.newPlot('plot', data, layout);
+const latitudeSlider = document.getElementById('latitude-slider');
+const longitudeSlider = document.getElementById('longitude-slider');
+const latitudeValue = document.getElementById('latitude-value');
+const longitudeValue = document.getElementById('longitude-value');
+const daySlider = document.getElementById('day-slider');
+const hourSlider = document.getElementById('hour-slider');
+const dayValue = document.getElementById('day-value');
+const hourValue = document.getElementById('hour-value');
+const dateValue = document.getElementById('date-value');
+const canvas = document.getElementById('analemma');
+const ctx = canvas.getContext('2d');
+
+const lattox = (lat) => {
+    return (lat / (2*Math.PI)*canvas.width+canvas.width/2)
+}
+const lontoy = (lon) => {
+
+    return (-lon / (Math.PI)*canvas.height+canvas.height/2)
+}
+function dayOfYearToMonthDay(dayOfYear) {
+    const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let month = 0;
+    while (dayOfYear >= daysInMonth[month]) {
+        dayOfYear -= daysInMonth[month];
+        month++;
+    }
+    return [month + 1, dayOfYear + 1 ];
+}
+function hourToHourMinute(hour) {
+    const hours = Math.floor(hour);
+    const minutes = Math.floor((hour - hours) * 60);
+    return [hours, minutes];
+}
+
+
+const updatePoint = () => {
+    const lat = parseFloat(latitudeValue.value);
+    const lon = parseFloat(longitudeValue.value);
+    const day = parseFloat(dayValue.value);
+    const hour = parseFloat(hourValue.value);
+
+    // Draw the background image
+    const img = new Image();
+    img.src = "https://upload.wikimedia.org/wikipedia/commons/e/ea/Equirectangular-projection.jpg";
+
+
+    const month_day = dayOfYearToMonthDay(day)
+    var offset = new Date().getTimezoneOffset();
+
+    const hour_minute = hourToHourMinute(hour)
+    const yhour_minute = hourToHourMinute(hour-offset/60)
+    dateValue.value = month_day[0].toString()+'/'+  month_day[1].toString() + '   '+ hour_minute[0].toString()+':'+  hour_minute[1].toString()+' GMT, your timezone; '+ yhour_minute[0].toString()+':'+  yhour_minute[1].toString() 
+    img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Draw the red horizontal line (latitude)
+        const latY = ((-lat + 90) / 180) * canvas.height;
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, latY);
+        ctx.lineTo(canvas.width, latY);
+        ctx.stroke();
+
+        // Draw the black vertical line (longitude)
+        const lonX = ((lon + 180) / 360) * canvas.width;
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(lonX, 0);
+        ctx.lineTo(lonX, canvas.height);
+        ctx.stroke();
+
+        // Draw sun position ******************************************
+        let a = day_hour_to_angle(day, hour);
+        let t = day_hour_to_year(day, hour);
+        let p = goal_angle_to_orbital_pos(a);
+        let analema = rev_transform_planet(p, a);
+
+        // x_analema[n] = analema[0];
+        // c_analema[n] = analema[1];
+        // analema_3d[n] = analema[2];
+        // time_array[n] = t;
+        // x[n] = p;
+
+        let pos = analema[0]
+        pos[0] = lattox(pos[0]);
+        pos[1] = lontoy(pos[1])
+        //console.log(pos)
+        ctx.beginPath();
+        ctx.arc( pos[0], pos[1], 50, 0, 2 * Math.PI);
+        ctx.fillStyle = "orange";
+        ctx.fill();
+
+        // SUN pos for day
+        ctx.rect = 'black';
+        ctx.lineWidth = 2;
+        //ctx.beginPath();
+        //ctx.moveTo(pos[0], pos[1]);
+        for (let n = 0.0; n < 24; n++) {
+            
+            let a = day_hour_to_angle(day, hour + n);
+            let p = goal_angle_to_orbital_pos(a);
+            let ana = rev_transform_planet(p, a);
+            const P = ana[0]
+            P[0] = lattox(P[0]);
+            P[1] = lontoy(P[1])
+            //ctx.lineTo(pos[0], pos[1]);
+            ctx.fillStyle = "yellow";
+            ctx.fillRect(P[0]-2, P[1]-2, 4, 4);
+        }
+        //ctx.stroke()
+        // Sun pos for year (same time)
+
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(pos[0], pos[1]);
+        for (let n = 0.0; n < 365; n++) {
+            
+            let a = day_hour_to_angle(day+n, hour);
+
+            let p = goal_angle_to_orbital_pos(a);
+            let ana = rev_transform_planet(p, a);
+            pos = ana[0]
+            pos[0] = lattox(pos[0]);
+            pos[1] = lontoy(pos[1])
+            ctx.lineTo(pos[0], pos[1]);
+        }
+        ctx.stroke()
+    };
+};
+
+
+
+
+
+latitudeSlider.addEventListener('input', () => {
+    latitudeValue.value = latitudeSlider.value;
+    updatePoint();
+});
+
+longitudeSlider.addEventListener('input', () => {
+    longitudeValue.value = longitudeSlider.value;
+    updatePoint();
+});
+
+latitudeValue.addEventListener('input', () => {
+    latitudeSlider.value = latitudeValue.value;
+    updatePoint();
+});
+
+longitudeValue.addEventListener('input', () => {
+    longitudeSlider.value = longitudeValue.value;
+    updatePoint();
+});
+
+daySlider.addEventListener('input', () => {
+    dayValue.value = daySlider.value;
+    updatePoint();
+});
+
+hourSlider.addEventListener('input', () => {
+    hourValue.value = hourSlider.value;
+    updatePoint();
+});
+
+dayValue.addEventListener('input', () => {
+    daySlider.value = dayValue.value;
+    updatePoint();
+});
+
+hourValue.addEventListener('input', () => {
+    hourSlider.value = hourValue.value;
+    updatePoint();
+});
+
+updatePoint();
+
+// START OF MATH **************************************************************************
+
+const vec = (a, b) => [a, b];
+const vec3 = (a, b, c) => [a, b, c];
+const normalize = a => {
+    const norm = math.norm(a);
+    return a.map(x => x / norm);
+};
+
+const rotationMatrix = (axis, angle) => {
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    switch (axis) {
+        case 0: // X-axis
+            return math.matrix([
+                [1, 0, 0],
+                [0, cosA, sinA],
+                [0, -sinA, cosA]
+            ]);
+        case 1: // Y-axis
+            return math.matrix([
+                [cosA, 0, -sinA],
+                [0, 1, 0],
+                [sinA, 0, cosA]
+            ]);
+        case 2: // Z-axis
+            return math.matrix([
+                [cosA, sinA, 0],
+                [-sinA, cosA, 0],
+                [0, 0, 1]
+            ]);
+        default:
+            throw new Error("Invalid axis. Axis should be 0, 1, or 2.");
+    }
+};
+
+const f1 = vec(-783.79 / 2, 0);
+const f2 = vec(783.79 / 2, 0);
+let a = 23455;
+let c = Math.abs(f1[0] - f2[0]) / 2;
+let b = Math.sqrt(a * a - c * c);
+
+const goal_angle_to_orbital_pos = (goal_angle) => {
+    let angle = goal_angle + 0;
+    let M = goal_angle - 0.0167086 * Math.sin(goal_angle - Math.PI);
+    let goal_dif = M - goal_angle;
+
+    for (let n = 0; n < 10; n += 1) {
+        angle += goal_dif;
+        M = angle - 0.0167086 * Math.sin(angle - Math.PI);
+        goal_dif = goal_angle - M;
+    }
+
+    p = vec(Math.cos(angle) * a, Math.sin(angle) * b);
+    return math.subtract(f1, p);
+}
+
+const rev_transform_planet = (p, a) => {
+    const angle = a * 365.25 * 366.25 / 365.25;
+    const day_matrix = rotationMatrix(2, angle); // Z-axis rotation
+
+    const earth_tilt = math.unit(-23.5, 'deg').toNumber('rad');
+    const tilt_matrix = rotationMatrix(1, earth_tilt); // Y-axis rotation
+
+    const angle_tilt_to_elipse = -0.22363;
+    const day_tilt_to_elipse = rotationMatrix(2, angle_tilt_to_elipse); // Z-axis rotation
+
+    p = vec3(p[0], p[1], 0);
+    let rotated_point = math.multiply(day_matrix, math.multiply(tilt_matrix, math.multiply(day_tilt_to_elipse, p)));
+    rotated_point = normalize(rotated_point._data);
+    const angle_rev = a * 365.25;
+
+    let longitude = Math.atan2(rotated_point[1], rotated_point[0])-0.24385;
+    let latitude = Math.atan2(rotated_point[2], Math.sqrt(rotated_point[1] * rotated_point[1] + rotated_point[0] * rotated_point[0]))
+
+    return [vec(longitude, latitude), Math.abs(angle_rev + 0.22363) % (2 * Math.PI), rotated_point];
+};
+
+const year_to_angle = (t) => { return t * 2.0 * Math.PI - (182.0) / 365.25 }
+const day_hour_to_angle = (d, h) => { return ((d - 182.0) / 365.25 + h / 365.25 / 24) * 2.0 * Math.PI }
+const day_hour_to_year = (d, h) => { return ((d) / 365.25 + h / 365.25 / 24) }
+
+
+
     </script>
 </body>
 </html>

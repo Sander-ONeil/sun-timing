@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orbit CLOCK</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/9.4.4/math.min.js"></script>
+    <style>
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .slider-label {
+            margin-right: 10px;
+            width: 100px;
+        }
+        .slider-input {
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="slider-container">
+        <div class="slider-label">Latitude:</div>
+        <input type="range" min="-90" max="90" value="0" class="slider-input" id="latitude-slider">
+        <input type="text" id="latitude-value" value="0">
+    </div>
+    <div class="slider-container">
+        <div class="slider-label">Longitude:</div>
+        <input type="range" min="-180" max="180" value="0" class="slider-input" id="longitude-slider">
+        <input type="text" id="longitude-value" value="0">
+    </div>
+        <div id="analemma" style="width: 600px; height: 400px;"></div>
+        
+    </div>
+    <script>
+const latitudeSlider = document.getElementById('latitude-slider');
+const longitudeSlider = document.getElementById('longitude-slider');
+const latitudeValue = document.getElementById('latitude-value');
+const longitudeValue = document.getElementById('longitude-value');
+
+const vec = (a, b) => [a, b];
+const vec3 = (a, b, c) => [a, b, c];
+const normalize = a => {
+    const norm = math.norm(a);
+    return a.map(x => x / norm);
+};
+
+const rotationMatrix = (axis, angle) => {
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    switch (axis) {
+        case 0: // X-axis
+            return math.matrix([
+                [1, 0, 0],
+                [0, cosA, sinA],
+                [0, -sinA, cosA]
+            ]);
+        case 1: // Y-axis
+            return math.matrix([
+                [cosA, 0, -sinA],
+                [0, 1, 0],
+                [sinA, 0, cosA]
+            ]);
+        case 2: // Z-axis
+            return math.matrix([
+                [cosA, sinA, 0],
+                [-sinA, cosA, 0],
+                [0, 0, 1]
+            ]);
+        default:
+            throw new Error("Invalid axis. Axis should be 0, 1, or 2.");
+    }
+};
+
+const f1 = vec(-783.79 / 2, 0);
+const f2 = vec(783.79 / 2, 0);
+let a = 23455;
+let c = Math.abs(f1[0] - f2[0]) / 2;
+let b = Math.sqrt(a * a - c * c);
+
+const goal_angle_to_orbital_pos = (goal_angle) => {
+    let angle = goal_angle + 0;
+    let M = goal_angle - 0.0167086 * Math.sin(goal_angle - Math.PI);
+    let goal_dif = M - goal_angle;
+
+    for (let n = 0; n < 10; n += 1) {
+        angle += goal_dif;
+        M = angle - 0.0167086 * Math.sin(angle - Math.PI);
+        goal_dif = goal_angle - M;
+    }
+
+    p = vec(Math.cos(angle) * a, Math.sin(angle) * b);
+    return math.subtract(f1, p);
+}
+
+const rev_transform_planet = (p, a) => {
+    const angle = a * 365.25 * 366.25 / 365.25;
+    const day_matrix = rotationMatrix(2, angle); // Z-axis rotation
+
+    const earth_tilt = math.unit(-23.5, 'deg').toNumber('rad');
+    const tilt_matrix = rotationMatrix(1, earth_tilt); // Y-axis rotation
+
+    const angle_tilt_to_elipse = -0.22363;
+    const day_tilt_to_elipse = rotationMatrix(2, angle_tilt_to_elipse); // Z-axis rotation
+
+    p = vec3(p[0], p[1], 0);
+    let rotated_point = math.multiply(day_matrix, math.multiply(tilt_matrix, math.multiply(day_tilt_to_elipse, p)));
+    rotated_point = normalize(rotated_point._data);
+    const angle_rev = a * 365.25;
+
+    let longitude = Math.atan2(rotated_point[1], rotated_point[0]);
+    let latitude = Math.atan2(rotated_point[2], Math.sqrt(rotated_point[1] * rotated_point[1] + rotated_point[0] * rotated_point[0]))
+
+    return [vec(longitude, latitude), Math.abs(angle_rev + 0.22363) % (2 * Math.PI), rotated_point];
+};
+
+const year_to_angle = (t) => { return t * 2.0 * Math.PI - (182.0) / 365.25 }
+const day_hour_to_angle = (d, h) => { return ((d - 182.0) / 365.25 + h / 365.25 / 24) * 2.0 * Math.PI }
+const day_hour_to_year = (d, h) => { return ((d) / 365.25 + h / 365.25 / 24) }
+
+
+const layout_2d = {
+    xaxis: { title: 'X Axis', scaleratio: 1 },
+    yaxis: { title: 'Y Axis', scaleanchor: 'x', scaleratio: 1 },
+    images: [
+        {
+            source: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Mercator_projection_Square.JPG/1280px-Mercator_projection_Square.JPG",
+            x: -3.14159265359,
+            y: 3.14159265359,
+            sizex: 6.28318530718,
+            sizey: 6.28318530718,
+            xref: "x",
+            yref: "y",
+            opacity: 1,
+            layer: "below"
+        }
+    ]
+};
+const lat = parseFloat(latitudeValue.value);
+const lon = parseFloat(longitudeValue.value);
+
+const latLineTrace = {
+    x: [-3.1416, 3.1416],
+    y: [lat*0.017453, lat*0.017453],
+    mode: 'lines',
+    line: {
+        color: 'red',
+        width: 2
+    },
+    type: 'scatter'
+};
+
+const lonLineTrace = {
+    x: [lon*0.017453, lon*0.017453],
+    y: [-1.5708, 1.5708],
+    mode: 'lines',
+    line: {
+        color: 'black',
+        width: 2
+    },
+    type: 'scatter'
+};
+const data = [latLineTrace, lonLineTrace];
+
+Plotly.newPlot('analemma', [data], layout_2d);
+
+
+const updatePoint = () => {
+    const lat = parseFloat(latitudeValue.value);
+    const lon = parseFloat(longitudeValue.value);
+
+    const latLineTrace = {
+        x: [-3.1416, 3.1416],
+        y: [lat*0.017453, lat*0.017453],
+        mode: 'lines',
+        line: {
+            color: 'red',
+            width: 2
+        },
+        type: 'scatter'
+    };
+
+    const lonLineTrace = {
+        x: [lon*0.017453, lon*0.017453],
+        y: [-1.5708, 1.5708],
+        mode: 'lines',
+        line: {
+            color: 'black',
+            width: 2
+        },
+        type: 'scatter'
+    };
+
+    const data = [latLineTrace, lonLineTrace];
+    //Plotly.update('analemma', data, {}, [1]);
+    Plotly.redraw('analemma');
+    //Plotly.newPlot('analemma', data, layout_2d);
+    
+};
+
+
+latitudeSlider.addEventListener('input', () => {
+    latitudeValue.value = latitudeSlider.value;
+    updatePoint();
+});
+
+longitudeSlider.addEventListener('input', () => {
+    longitudeValue.value = longitudeSlider.value;
+    updatePoint();
+});
+
+latitudeValue.addEventListener('input', () => {
+    latitudeSlider.value = latitudeValue.value;
+    updatePoint();
+});
+
+longitudeValue.addEventListener('input', () => {
+    longitudeSlider.value = longitudeValue.value;
+    updatePoint();
+});
+
+updatePoint();
+
+    </script>
+</body>
+</html>
