@@ -23,6 +23,13 @@
         #analemma {
             border: 1px solid black;
         }
+        #date-value{
+            color: black
+            
+        }
+        #sun-pos{
+            color: black
+        }
     </style>
 </head>
 <body>
@@ -47,8 +54,10 @@
         <input type="text" id="hour-value" value="0">
     </div>
     <input type="text" id="date-value" size="100" value="0">
+    <p id="sun-pos">Sun is currently: </p>
+    <canvas id="horizon" width="500" height="500"></canvas>
     <canvas id="analemma" width="2000" height="1000"></canvas>
-
+    <!-- <canvas id="horizon" width="500" height="500"></canvas> -->
     <script>
 const latitudeSlider = document.getElementById('latitude-slider');
 const longitudeSlider = document.getElementById('longitude-slider');
@@ -59,8 +68,12 @@ const hourSlider = document.getElementById('hour-slider');
 const dayValue = document.getElementById('day-value');
 const hourValue = document.getElementById('hour-value');
 const dateValue = document.getElementById('date-value');
+const sunpostext =  document.getElementById('sun-pos');
 const canvas = document.getElementById('analemma');
 const ctx = canvas.getContext('2d');
+
+const horizon = document.getElementById('horizon');
+const ct = horizon.getContext('2d')
 
 function daysSinceJanFirst() {
     const now = new Date();
@@ -174,6 +187,8 @@ const updatePoint = () => {
     const hour_minute = hourToHourMinuteString(hour)
     const yhour_minute = hourToHourMinuteString(hour-offset/60)
     dateValue.value = months[month_day[0]-1]+'/'+  month_day[1].toString() + '   '+ hour_minute +' GMT, your timezone; '+ yhour_minute 
+    var sunlat = 0
+    var sunlon = 0
     img.onload = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -210,6 +225,11 @@ const updatePoint = () => {
         // x[n] = p;
 
         let pos = analema[0]
+        sunlon = pos[0]*180/Math.PI
+        sunlat = pos[1]*180/Math.PI
+        
+        sunpostext.innerHTML = "sun is "+(sunlon-lon).toString() + '° east and ' +( sunlat-lat).toString() + "° north of you"
+
         pos[0] = lontox(pos[0]);
         pos[1] = lattoy(pos[1])
         //console.log(pos)
@@ -238,7 +258,7 @@ const updatePoint = () => {
             P[0] = lontox(longitude);
             P[1] = lattoy(latitude)
             ctx.fillStyle = "black";
-            ctx.fillRect(P[0]-2, P[1]-2, 4, 4);
+            ctx.fillRect(P[0]-2, P[1]-2, 8, 8);
         }
         for (let n = 0.0; n < points; n++) {
             let a = n/points * Math.PI * 2
@@ -341,14 +361,121 @@ const updatePoint = () => {
             ctx.fillRect(pos[0], pos[1], 2, 2);
         }
         //ctx.stroke()
-
-
-        
-
-
+        updatehorizon(p3,lon,lat,day,hour)
     };
+    
 };
 
+function updatehorizon(sun_3d,lon,lat,day,hour) {
+    //circles
+    ct.clearRect(0, 0, horizon.width, horizon.height);
+    ct.beginPath();
+    ct.lineWidth = '5'
+    ct.arc( horizon.width/2, horizon.height/2, horizon.height/2, 0, 2 * Math.PI);
+    ct.fillStyle = 'rgb(25, 25, 112)'
+    ct.fill()
+    ct.stroke()
+
+    ct.beginPath();
+    ct.lineWidth = '1'
+    ct.arc( horizon.width/2, horizon.height/2, horizon.height/2/2, 0, 2 * Math.PI);
+    ct.fillStyle = 'rgb(137, 207, 240)'
+    ct.fill()
+    ct.stroke()
+    ct.beginPath();
+    ct.lineWidth = '5'
+    ct.arc( horizon.width/2, horizon.height/2, 1, 0, 2 * Math.PI);
+    ct.stroke()
+
+    var self_3d = [Math.cos(lon/180*Math.PI)*Math.sin(lat/180*Math.PI),Math.sin(lon/180*Math.PI)*Math.sin(lat/180*Math.PI),Math.cos(lat/180*Math.PI)]
+    self_3d = normalize(self_3d)
+    sun_3d = normalize(sun_3d)
+
+    ct.beginPath();
+    var place = [horizon.width/2 + (self_3d[0] - sun_3d[0])*horizon.width/2, horizon.height/2 + (self_3d[1] - sun_3d[1])*horizon.width/2]
+
+    var lonmat =  rotationMatrix(2, lon/180*Math.PI + Math.PI/2+0.24385); 
+    var latmat = rotationMatrix(0,-lat/180*Math.PI+ Math.PI/2);
+    //console.log(lonmat)
+    var rotated_point = math.multiply(latmat,math.multiply(lonmat, sun_3d))
+    rotated_point = normalize(rotated_point._data);
+    var ns = Math.atan2(rotated_point[1],rotated_point[2])/Math.PI
+    var ew = Math.atan2(rotated_point[0],rotated_point[2])/Math.PI
+    var r = Math.atan2(Math.sqrt (rotated_point[1]*rotated_point[1] + rotated_point[0]*rotated_point[0]),rotated_point[2])/Math.PI
+    var theta = Math.atan2(rotated_point[1],rotated_point[0])
+    var x = Math.cos(theta)*r
+    var y = Math.sin(theta)*r
+    place[0] = horizon.width/2 +x*horizon.width/2;
+    place[1] = horizon.width/2 -y*horizon.width/2;
+    //console.log(place)
+    ct.beginPath();
+    ct.arc( place[0],place[1], 8, 0, 2 * Math.PI);
+    ct.fillStyle = 'black'
+    ct.fill()
+    ct.beginPath();
+    ct.arc( place[0],place[1], 6, 0, 2 * Math.PI);
+    ct.fillStyle = 'yellow'
+    ct.fill()
+    
+    for (let n = 0.0; n < 365; n++) {
+        
+        let a = day_hour_to_angle(day+n, hour);
+
+        let p = goal_angle_to_orbital_pos(a);
+        let ana = rev_transform_planet(p, a);
+        
+
+        rotated_point = math.multiply(latmat,math.multiply(lonmat, ana[2]))
+        rotated_point = normalize(rotated_point._data);
+        
+        r = Math.atan2(Math.sqrt (rotated_point[1]*rotated_point[1] + rotated_point[0]*rotated_point[0]),rotated_point[2])/Math.PI
+        theta = Math.atan2(rotated_point[1],rotated_point[0])
+        x = Math.cos(theta)*r
+        y = Math.sin(theta)*r
+        var X = horizon.width/2 +x*horizon.width/2;
+        var Y = horizon.width/2 -y*horizon.width/2;
+        //ctx.lineTo(pos[0], pos[1]);
+
+        ct.fillStyle = "white";
+        ct.fillRect(X, Y, 2, 2);
+    }
+    for (let n = 0.0; n < 24; n++) {
+            
+        let a = day_hour_to_angle(day, hour+n);
+
+        let p = goal_angle_to_orbital_pos(a);
+        let ana = rev_transform_planet(p, a);
+        
+
+        rotated_point = math.multiply(latmat,math.multiply(lonmat, ana[2]))
+        rotated_point = normalize(rotated_point._data);
+        
+        r = Math.atan2(Math.sqrt (rotated_point[1]*rotated_point[1] + rotated_point[0]*rotated_point[0]),rotated_point[2])/Math.PI
+        theta = Math.atan2(rotated_point[1],rotated_point[0])
+        x = Math.cos(theta)*r
+        y = Math.sin(theta)*r
+        var X = horizon.width/2 +x*horizon.width/2;
+        var Y = horizon.width/2 -y*horizon.width/2;
+        //ctx.lineTo(pos[0], pos[1]);
+        ct.fillStyle = "black";
+        ct.fillRect(X-1, Y-1, 6, 6);
+        ct.fillStyle = "white";
+        ct.fillRect(X, Y, 4, 4);
+    }
+    ct.font = "50px Arial";
+    fillStyle = "white"
+    ct.textAlign = "center";
+    ct.fillText("N",horizon.width/2,40);
+    ct.fillText("S",horizon.width/2,horizon.height);
+    ct.fillText("W",20,horizon.height/2+20);
+    ct.fillText("E",horizon.width-20,horizon.height/2+20);
+    ct.font = "20px Arial";
+    ct.fillText("horizon",horizon.width/2,horizon.height/2+horizon.height/2/2+5);
+    
+}
+// function compare_eastwest(){
+
+// }
 
 
 
